@@ -29,6 +29,8 @@ class AppSharesController extends Controller
     private const THUMB_EPUB_EXTENSIONS = ['epub'];
     private const THUMB_PDF_TYPES = ['application/pdf'];
     private const THUMB_PDF_EXTENSIONS = ['pdf'];
+    private const THUMB_DNG_TYPES = ['image/x-adobe-dng', 'image/dng'];
+    private const THUMB_DNG_EXTENSIONS = ['dng'];
 
     /**
      * Symfony's Content-Disposition filename cannot contain "/" or "\".
@@ -842,6 +844,7 @@ class AppSharesController extends Controller
         $isAudio = $this->isAudioFile($file->type, $file->name);
         $isEpub = $this->isEpubFile($file->type, $file->name);
         $isPdf = $this->isPdfFile($file->type, $file->name);
+        $isDng = $this->isDngFile($file->type, $file->name);
 
         // Ensure cache directory exists
         if (!is_dir($thumbCacheDir)) {
@@ -867,6 +870,8 @@ class AppSharesController extends Controller
                 $this->generateEpubThumbnail($sourcePath, $thumbPath);
             } elseif ($isPdf) {
                 $this->generatePdfThumbnail($sourcePath, $thumbPath);
+            } elseif ($isDng) {
+                $this->generateDngThumbnail($sourcePath, $thumbPath);
             } else {
                 $this->generateImageThumbnail($sourcePath, $thumbPath);
             }
@@ -958,6 +963,8 @@ class AppSharesController extends Controller
                 $this->generateEpubThumbnail($tempFile, $thumbPath);
             } elseif ($isPdf) {
                 $this->generatePdfThumbnail($tempFile, $thumbPath);
+            } elseif ($isDng) {
+                $this->generateDngThumbnail($tempFile, $thumbPath);
             } else {
                 $this->generateImageThumbnail($tempFile, $thumbPath);
             }
@@ -1301,10 +1308,14 @@ class AppSharesController extends Controller
             return true;
         }
         
+        if (in_array($mimeType, self::THUMB_DNG_TYPES)) {
+            return true;
+        }
+        
         // Check extension for files with generic MIME type
         if ($mimeType === 'application/octet-stream' && $filename) {
             $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-            if (in_array($ext, self::THUMB_AUDIO_EXTENSIONS) || in_array($ext, self::THUMB_EPUB_EXTENSIONS) || in_array($ext, self::THUMB_PDF_EXTENSIONS)) {
+            if (in_array($ext, self::THUMB_AUDIO_EXTENSIONS) || in_array($ext, self::THUMB_EPUB_EXTENSIONS) || in_array($ext, self::THUMB_PDF_EXTENSIONS) || in_array($ext, self::THUMB_DNG_EXTENSIONS)) {
                 return true;
             }
         }
@@ -1361,5 +1372,56 @@ class AppSharesController extends Controller
         }
         
         return false;
+    }
+
+    /**
+     * Check if a file is a DNG file (by MIME type or extension)
+     */
+    private function isDngFile(?string $mimeType, ?string $filename = null): bool
+    {
+        if (in_array($mimeType, self::THUMB_DNG_TYPES)) {
+            return true;
+        }
+        
+        if ($mimeType === 'application/octet-stream' && $filename) {
+            $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+            return in_array($ext, self::THUMB_DNG_EXTENSIONS);
+        }
+        
+        return false;
+    }
+
+    /**
+     * Generate a thumbnail from DNG file using ImageMagick
+     */
+    private function generateDngThumbnail(string $dngPath, string $outputPath): void
+    {
+        $tempPath = $outputPath . '.tmp.png';
+
+        // Use ImageMagick to convert DNG to a temporary PNG
+        // DNG from iOS needs 90° counter-clockwise rotation and horizontal flip on Linux
+        // due to how ImageMagick's libraw delegate interprets the raw data
+        $command = sprintf(
+            'convert %s[0] -rotate -90 -flop -thumbnail 200x200 %s 2>/dev/null',
+            escapeshellarg($dngPath),
+            escapeshellarg($tempPath)
+        );
+        shell_exec($command);
+
+        // Convert to webp
+        if (file_exists($tempPath) && filesize($tempPath) > 0) {
+            try {
+                $manager = new ImageManager(new Driver());
+                $image = $manager->read($tempPath);
+                $encoded = $image->toWebp(80);
+                file_put_contents($outputPath, $encoded);
+            } catch (\Exception $e) {
+                // DNG thumbnail conversion failed silently
+            } finally {
+                if (file_exists($tempPath)) {
+                    unlink($tempPath);
+                }
+            }
+        }
     }
 }

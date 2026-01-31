@@ -46,6 +46,7 @@ RUN apk add --no-cache \
     cronie \
     ffmpeg \
     poppler-utils \
+    imagemagick \
     php83 \
     php83-pdo_pgsql \
     php83-pdo_sqlite \
