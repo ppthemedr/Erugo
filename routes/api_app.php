@@ -92,7 +92,18 @@ Route::group(['prefix' => 'users/me', 'middleware' => ['auth']], function () {
 | Shares Routes
 |--------------------------------------------------------------------------
 */
-// Public share routes
+// Authenticated share routes (must be before public routes to avoid wildcard conflicts)
+Route::group(['prefix' => 'shares', 'middleware' => ['auth']], function () {
+    Route::get('/', 'AppSharesController@index')->name('app.shares.index');
+    Route::get('/{shareId}/files/{fileId}/thumb', 'AppSharesController@fileThumbnail')
+        ->name('app.shares.fileThumbnail');
+    Route::post('/{id}/expire', 'AppSharesController@expire')->name('app.shares.expire');
+    Route::post('/{id}/extend', 'AppSharesController@extend')->name('app.shares.extend');
+    Route::post('/{id}/download-limit', 'AppSharesController@setDownloadLimit')->name('app.shares.setDownloadLimit');
+    Route::post('/prune', 'AppSharesController@prune')->name('app.shares.prune');
+});
+
+// Public share routes (after authenticated routes - wildcard filePath would otherwise match thumbnail routes)
 Route::get('/shares/{longId}', 'AppSharesController@read')
     ->name('app.shares.read');
 Route::get('/shares/{longId}/download', 'AppSharesController@download')
@@ -100,15 +111,6 @@ Route::get('/shares/{longId}/download', 'AppSharesController@download')
 Route::get('/shares/{longId}/files/{filePath}', 'AppSharesController@downloadFile')
     ->where('filePath', '.*')
     ->name('app.shares.downloadFile');
-
-// Authenticated share routes
-Route::group(['prefix' => 'shares', 'middleware' => ['auth']], function () {
-    Route::get('/', 'AppSharesController@index')->name('app.shares.index');
-    Route::post('/{id}/expire', 'AppSharesController@expire')->name('app.shares.expire');
-    Route::post('/{id}/extend', 'AppSharesController@extend')->name('app.shares.extend');
-    Route::post('/{id}/download-limit', 'AppSharesController@setDownloadLimit')->name('app.shares.setDownloadLimit');
-    Route::post('/prune', 'AppSharesController@prune')->name('app.shares.prune');
-});
 
 /*
 |--------------------------------------------------------------------------
