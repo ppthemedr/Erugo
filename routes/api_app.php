@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\App\AppUserController;
 use App\Http\Controllers\Api\App\AppSharesController;
 use App\Http\Controllers\Api\App\AppUploadsController;
 use App\Http\Controllers\Api\App\AppReverseSharesController;
+use App\Http\Controllers\Api\App\AppSettingsController;
 use App\Http\Controllers\StatsController;
 
 /*
@@ -70,9 +71,29 @@ Route::group(['prefix' => 'config'], function () {
 Route::group(['prefix' => 'branding'], function () {
     Route::get('/logo', 'AppBrandingController@logo')->name('app.branding.logo');
     Route::get('/favicon', 'AppBrandingController@favicon')->name('app.branding.favicon');
+    Route::get('/favicon/status', 'AppBrandingController@faviconStatus')->name('app.branding.faviconStatus');
     Route::get('/backgrounds', 'AppBrandingController@backgrounds')->name('app.branding.backgrounds');
     Route::get('/backgrounds/{id}', 'AppBrandingController@background')->name('app.branding.background');
     Route::get('/backgrounds/{id}/thumb', 'AppBrandingController@backgroundThumb')->name('app.branding.backgroundThumb');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Branding Management Routes (Admin Only)
+|--------------------------------------------------------------------------
+*/
+Route::group(['prefix' => 'branding', 'middleware' => ['auth', Admin::class]], function () {
+    // Logo management
+    Route::post('/logo', 'AppBrandingController@uploadLogo')->name('app.branding.uploadLogo');
+    Route::delete('/logo', 'AppBrandingController@deleteLogo')->name('app.branding.deleteLogo');
+    
+    // Favicon management
+    Route::post('/favicon', 'AppBrandingController@uploadFavicon')->name('app.branding.uploadFavicon');
+    Route::delete('/favicon', 'AppBrandingController@deleteFavicon')->name('app.branding.deleteFavicon');
+    
+    // Background management
+    Route::post('/backgrounds', 'AppBrandingController@uploadBackground')->name('app.branding.uploadBackground');
+    Route::delete('/backgrounds/{id}', 'AppBrandingController@deleteBackground')->name('app.branding.deleteBackground');
 });
 
 /*
@@ -145,4 +166,23 @@ Route::group(['prefix' => 'reverse-shares', 'middleware' => ['auth']], function 
 Route::group(['prefix' => 'stats', 'middleware' => ['auth', Admin::class]], function () {
     Route::get('/', [StatsController::class, 'getStats'])->name('app.stats.get');
     Route::get('/system-info', [StatsController::class, 'getSystemInfo'])->name('app.stats.systemInfo');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Settings Routes (Admin Only)
+|--------------------------------------------------------------------------
+*/
+Route::group(['prefix' => 'settings', 'middleware' => ['auth', Admin::class]], function () {
+    // General settings
+    Route::get('/general', 'AppSettingsController@getGeneral')->name('app.settings.general.get');
+    Route::put('/general', 'AppSettingsController@updateGeneral')->name('app.settings.general.update');
+    
+    // Shares settings
+    Route::get('/shares', 'AppSettingsController@getShares')->name('app.settings.shares.get');
+    Route::put('/shares', 'AppSettingsController@updateShares')->name('app.settings.shares.update');
+    
+    // Branding settings
+    Route::get('/branding', 'AppSettingsController@getBranding')->name('app.settings.branding.get');
+    Route::put('/branding', 'AppSettingsController@updateBranding')->name('app.settings.branding.update');
 });

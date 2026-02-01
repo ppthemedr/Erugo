@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api\App;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Services\SettingsService;
 use App\Utils\FileHelper;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
 
@@ -355,5 +359,332 @@ class AppBrandingController extends Controller
             'webm' => 'video/webm',
             default => 'application/octet-stream',
         };
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Logo Management
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Upload a new logo
+     */
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'logo' => 'required|image|mimes:png,svg|max:2048',
+        ]);
+
+        if ($validator->fails()) {
+            $failedRules = $validator->failed();
+            $errorCode = 'validation_failed';
+            
+            if (isset($failedRules['logo']['Max'])) {
+                $errorCode = 'file_too_large';
+            } elseif (isset($failedRules['logo']['Mimes'])) {
+                $errorCode = 'invalid_file_type';
+            } elseif (isset($failedRules['logo']['Image'])) {
+                $errorCode = 'invalid_image';
+            } elseif (isset($failedRules['logo']['Required'])) {
+                $errorCode = 'file_required';
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'error_code' => $errorCode,
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $logo = $request->file('logo');
+        
+        try {
+            $stored = Storage::disk('public')->put('images/logo.png', file_get_contents($logo));
+            
+            if (!$stored) {
+                Log::error('Failed to store logo file');
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Failed to save logo file',
+                ], 500);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Logo updated successfully',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Logo upload error: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to save logo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Reset logo to default
+     */
+    public function deleteLogo(): JsonResponse
+    {
+        try {
+            if (!Storage::disk('public')->exists('images/_default-logo.png')) {
+                Log::error('Default logo not found in storage');
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Default logo not found',
+                ], 404);
+            }
+            
+            $defaultLogo = Storage::disk('public')->get('images/_default-logo.png');
+            Storage::disk('public')->put('images/logo.png', $defaultLogo);
+
+            $logoSetting = Setting::where('key', 'logo')->where('group', 'ui.logo')->first();
+            if ($logoSetting) {
+                $logoSetting->previous_value = $logoSetting->value;
+                $logoSetting->value = 'erugo-logo.png';
+                $logoSetting->save();
+                
+                app(SettingsService::class)->clearCache();
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Logo reset to default successfully',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Logo reset error: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to reset logo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Favicon Management
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Get favicon status
+     */
+    public function faviconStatus(): JsonResponse
+    {
+        $hasCustomFavicon = Storage::disk('public')->exists('favicon.png') || 
+                           Storage::disk('public')->exists('favicon.svg');
+        
+        $filename = null;
+        if (Storage::disk('public')->exists('favicon.png')) {
+            $filename = 'favicon.png';
+        } elseif (Storage::disk('public')->exists('favicon.svg')) {
+            $filename = 'favicon.svg';
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'has_custom_favicon' => $hasCustomFavicon,
+                'filename' => $filename,
+            ]
+        ]);
+    }
+
+    /**
+     * Upload a new favicon
+     */
+    public function uploadFavicon(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'favicon' => 'required|file|mimes:png,svg|max:1024',
+        ]);
+
+        if ($validator->fails()) {
+            $failedRules = $validator->failed();
+            $errorCode = 'validation_failed';
+            
+            if (isset($failedRules['favicon']['Max'])) {
+                $errorCode = 'file_too_large';
+            } elseif (isset($failedRules['favicon']['Mimes'])) {
+                $errorCode = 'invalid_file_type';
+            } elseif (isset($failedRules['favicon']['Required'])) {
+                $errorCode = 'file_required';
+            } elseif (isset($failedRules['favicon']['File'])) {
+                $errorCode = 'invalid_file';
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'error_code' => $errorCode,
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $favicon = $request->file('favicon');
+        $extension = FileHelper::sanitizeFileExtension($favicon->getClientOriginalName());
+        
+        // Ensure extension is one of the allowed types (extra safety after validation)
+        if (!in_array($extension, ['png', 'svg'])) {
+            return response()->json([
+                'status' => 'error',
+                'error_code' => 'invalid_file_type',
+                'message' => 'Invalid file extension',
+            ], 422);
+        }
+        
+        $filename = 'favicon.' . $extension;
+        
+        // Delete any existing favicon files first
+        if (Storage::disk('public')->exists('favicon.png')) {
+            Storage::disk('public')->delete('favicon.png');
+        }
+        if (Storage::disk('public')->exists('favicon.svg')) {
+            Storage::disk('public')->delete('favicon.svg');
+        }
+        
+        Storage::disk('public')->put($filename, file_get_contents($favicon));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Favicon updated successfully',
+            'data' => [
+                'filename' => $filename,
+            ]
+        ]);
+    }
+
+    /**
+     * Delete custom favicon (resets to default)
+     */
+    public function deleteFavicon(): JsonResponse
+    {
+        $deleted = false;
+        
+        if (Storage::disk('public')->exists('favicon.png')) {
+            Storage::disk('public')->delete('favicon.png');
+            $deleted = true;
+        }
+        if (Storage::disk('public')->exists('favicon.svg')) {
+            Storage::disk('public')->delete('favicon.svg');
+            $deleted = true;
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $deleted ? 'Favicon deleted successfully' : 'No custom favicon to delete',
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Background Management
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Upload a new background
+     */
+    public function uploadBackground(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'background' => 'required|file|mimes:jpg,jpeg,png,gif,webp,mp4,webm',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Background file upload failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $file = $request->file('background');
+            $fileName = $file->getClientOriginalName();
+            $safeFilename = FileHelper::sanitizeFilename($fileName);
+            $file->storeAs('', $safeFilename, 'backgrounds');
+
+            $encodedFilename = rawurlencode($safeFilename);
+            $isVideo = $this->isVideo($safeFilename);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Background uploaded successfully',
+                'data' => [
+                    'id' => $encodedFilename,
+                    'filename' => $safeFilename,
+                    'type' => $isVideo ? 'video' : 'image',
+                    'url' => url('/api/app/v1/branding/backgrounds/' . $encodedFilename),
+                    'thumbnail_url' => url('/api/app/v1/branding/backgrounds/' . $encodedFilename . '/thumb'),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Background upload error: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Background file upload failed',
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a background
+     */
+    public function deleteBackground(string $id): JsonResponse
+    {
+        $file = rawurldecode($id);
+        
+        if (!FileHelper::validatePathParameter($file)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid filename',
+            ], 400);
+        }
+        
+        $safeFile = basename($file);
+        
+        if (!Storage::disk('backgrounds')->exists($safeFile)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Background not found',
+            ], 404);
+        }
+
+        try {
+            // Delete the file itself
+            Storage::disk('backgrounds')->delete($safeFile);
+            // Delete the cached file (for images)
+            Storage::disk('backgrounds')->delete('cache/' . $safeFile);
+            // Delete the cached thumbs (now always .webp)
+            $thumbFilename = pathinfo($safeFile, PATHINFO_FILENAME) . '.webp';
+            Storage::disk('backgrounds')->delete('cache/thumbs/' . $thumbFilename);
+
+            // Check if there are any remaining background files
+            $remainingFiles = array_filter(
+                Storage::disk('backgrounds')->files(''),
+                fn($file) => $this->isValidBackground($file)
+            );
+
+            // If no backgrounds remain, automatically disable use_my_backgrounds
+            if (empty($remainingFiles)) {
+                Setting::where('key', 'use_my_backgrounds')->update(['value' => 'false']);
+                app(SettingsService::class)->clearCache();
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Background deleted successfully',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Background delete error: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Background deletion failed',
+            ], 500);
+        }
     }
 }
