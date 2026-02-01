@@ -26,6 +26,8 @@ RUN apk add --no-cache \
     ffmpeg \
     poppler-utils \
     imagemagick \
+    libheif \
+    exiftool \
     php83 \
     php83-pdo_pgsql \
     php83-pdo_sqlite \

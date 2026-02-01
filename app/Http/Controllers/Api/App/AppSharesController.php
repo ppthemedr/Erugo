@@ -20,7 +20,7 @@ use Carbon\Carbon;
 
 class AppSharesController extends Controller
 {
-    private const THUMB_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    private const THUMB_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/avif'];
     private const THUMB_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
     private const THUMB_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/x-m4b', 'audio/aac', 'audio/flac', 'audio/ogg'];
     // Audio extensions to check when MIME type is generic (application/octet-stream)
@@ -1392,31 +1392,62 @@ class AppSharesController extends Controller
     }
 
     /**
-     * Generate a thumbnail from DNG file using ImageMagick
+     * Generate a thumbnail from DNG file using ImageMagick + exiftool for orientation
      */
     private function generateDngThumbnail(string $dngPath, string $outputPath): void
     {
         $tempPath = $outputPath . '.tmp.png';
 
-        // Use ImageMagick to convert DNG to a temporary PNG
-        // DNG from iOS needs 90° counter-clockwise rotation and horizontal flip on Linux
-        // due to how ImageMagick's libraw delegate interprets the raw data
-        $command = sprintf(
-            'convert %s[0] -rotate -90 -flop -thumbnail 200x200 %s 2>/dev/null',
+        // Get orientation from exiftool (returns numeric value 1-8)
+        $orientCommand = sprintf('exiftool -n -Orientation -s3 %s 2>/dev/null', escapeshellarg($dngPath));
+        $orientation = trim(shell_exec($orientCommand) ?? '1');
+
+        // Use ImageMagick to convert DNG to temporary PNG (no rotation applied)
+        $convertCommand = sprintf(
+            'convert %s[0] -thumbnail 200x200 %s 2>/dev/null',
             escapeshellarg($dngPath),
             escapeshellarg($tempPath)
         );
-        shell_exec($command);
+        shell_exec($convertCommand);
 
-        // Convert to webp
+        // Convert to webp with correct orientation
         if (file_exists($tempPath) && filesize($tempPath) > 0) {
             try {
                 $manager = new ImageManager(new Driver());
                 $image = $manager->read($tempPath);
+                
+                // Apply rotation based on EXIF orientation value
+                // 1 = normal, 2 = flip H, 3 = 180°, 4 = flip V
+                // 5 = flip H + 270°, 6 = 90° CW, 7 = flip H + 90°, 8 = 270° CW
+                switch ($orientation) {
+                    case '2':
+                        $image->flip();
+                        break;
+                    case '3':
+                        $image->rotate(180);
+                        break;
+                    case '4':
+                        $image->flop();
+                        break;
+                    case '5':
+                        $image->flip()->rotate(270);
+                        break;
+                    case '6':
+                        $image->rotate(90);
+                        break;
+                    case '7':
+                        $image->flip()->rotate(90);
+                        break;
+                    case '8':
+                        $image->rotate(270);
+                        break;
+                    // case '1' or default: no rotation needed
+                }
+                
                 $encoded = $image->toWebp(80);
                 file_put_contents($outputPath, $encoded);
             } catch (\Exception $e) {
-                // DNG thumbnail conversion failed silently
+                // DNG thumbnail conversion failed
             } finally {
                 if (file_exists($tempPath)) {
                     unlink($tempPath);
