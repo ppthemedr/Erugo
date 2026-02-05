@@ -66,6 +66,114 @@ class AppBrandingController extends Controller
     }
 
     /**
+     * Get the logo as PNG (for iOS compatibility)
+     * Logo is already stored as PNG, so this is straightforward
+     */
+    public function logoPng()
+    {
+        return $this->logo();
+    }
+
+    /**
+     * Get the favicon as PNG (for iOS compatibility)
+     * Converts SVG to PNG if needed, with caching
+     */
+    public function faviconPng()
+    {
+        // Check for custom favicon PNG - serve directly
+        if (Storage::disk('public')->exists('favicon.png')) {
+            $path = Storage::disk('public')->path('favicon.png');
+            return $this->fileResponseWithCaching($path, 'image/png');
+        }
+
+        // Check if we have a cached PNG conversion
+        $cachedPath = Storage::disk('public')->path('cache/favicon.png');
+        if (file_exists($cachedPath)) {
+            return $this->fileResponseWithCaching($cachedPath, 'image/png');
+        }
+
+        // Determine source SVG
+        $svgPath = null;
+        if (Storage::disk('public')->exists('favicon.svg')) {
+            $svgPath = Storage::disk('public')->path('favicon.svg');
+        } else {
+            $defaultPath = public_path('icon.svg');
+            if (file_exists($defaultPath)) {
+                $svgPath = $defaultPath;
+            }
+        }
+
+        if (!$svgPath) {
+            abort(404, 'Favicon not found');
+        }
+
+        // Convert SVG to PNG using ImageMagick
+        $pngData = $this->convertSvgToPng($svgPath);
+        if (!$pngData) {
+            abort(500, 'Failed to convert favicon to PNG');
+        }
+
+        // Cache the converted PNG
+        $cacheDir = Storage::disk('public')->path('cache');
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        file_put_contents($cachedPath, $pngData);
+
+        return response($pngData, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
+    /**
+     * Convert SVG to PNG using ImageMagick
+     */
+    private function convertSvgToPng(string $svgPath, int $size = 256): ?string
+    {
+        $tempOutput = sys_get_temp_dir() . '/favicon_' . uniqid() . '.png';
+
+        // Use ImageMagick convert command
+        // -background none: transparent background
+        // -density: higher density for better quality SVG rendering
+        // -resize: output size
+        $command = sprintf(
+            'convert -background none -density 300 %s -resize %dx%d %s 2>&1',
+            escapeshellarg($svgPath),
+            $size,
+            $size,
+            escapeshellarg($tempOutput)
+        );
+
+        exec($command, $output, $returnCode);
+
+        if ($returnCode !== 0 || !file_exists($tempOutput)) {
+            Log::error('SVG to PNG conversion failed', [
+                'command' => $command,
+                'output' => $output,
+                'returnCode' => $returnCode,
+            ]);
+            return null;
+        }
+
+        $pngData = file_get_contents($tempOutput);
+        unlink($tempOutput);
+
+        return $pngData;
+    }
+
+    /**
+     * Clear the cached favicon PNG
+     */
+    private function clearFaviconPngCache(): void
+    {
+        $cachedPath = Storage::disk('public')->path('cache/favicon.png');
+        if (file_exists($cachedPath)) {
+            unlink($cachedPath);
+        }
+    }
+
+    /**
      * List all available backgrounds with URLs
      */
     public function backgrounds(): JsonResponse
@@ -546,6 +654,9 @@ class AppBrandingController extends Controller
             Storage::disk('public')->delete('favicon.svg');
         }
         
+        // Clear the cached PNG conversion
+        $this->clearFaviconPngCache();
+        
         Storage::disk('public')->put($filename, file_get_contents($favicon));
 
         return response()->json([
@@ -572,6 +683,9 @@ class AppBrandingController extends Controller
             Storage::disk('public')->delete('favicon.svg');
             $deleted = true;
         }
+        
+        // Clear the cached PNG conversion so it regenerates from default
+        $this->clearFaviconPngCache();
 
         return response()->json([
             'status' => 'success',

@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\App\AppSharesController;
 use App\Http\Controllers\Api\App\AppUploadsController;
 use App\Http\Controllers\Api\App\AppReverseSharesController;
 use App\Http\Controllers\Api\App\AppSettingsController;
+use App\Http\Controllers\Api\App\AppUsersAdminController;
 use App\Http\Controllers\StatsController;
 
 /*
@@ -70,7 +71,9 @@ Route::group(['prefix' => 'config'], function () {
 */
 Route::group(['prefix' => 'branding'], function () {
     Route::get('/logo', 'AppBrandingController@logo')->name('app.branding.logo');
+    Route::get('/logo.png', 'AppBrandingController@logoPng')->name('app.branding.logoPng');
     Route::get('/favicon', 'AppBrandingController@favicon')->name('app.branding.favicon');
+    Route::get('/favicon.png', 'AppBrandingController@faviconPng')->name('app.branding.faviconPng');
     Route::get('/favicon/status', 'AppBrandingController@faviconStatus')->name('app.branding.faviconStatus');
     Route::get('/backgrounds', 'AppBrandingController@backgrounds')->name('app.branding.backgrounds');
     Route::get('/backgrounds/{id}', 'AppBrandingController@background')->name('app.branding.background');
@@ -106,6 +109,20 @@ Route::group(['prefix' => 'users/me', 'middleware' => ['auth']], function () {
     Route::put('/', 'AppUserController@update')->name('app.users.update');
     Route::post('/change-password', 'AppUserController@changePassword')->name('app.users.changePassword');
     Route::delete('/providers/{providerId}', 'AppUserController@unlinkProvider')->name('app.users.unlinkProvider');
+});
+
+/*
+|--------------------------------------------------------------------------
+| User Management Routes (Admin Only)
+|--------------------------------------------------------------------------
+*/
+Route::group(['prefix' => 'users', 'middleware' => ['auth', Admin::class]], function () {
+    Route::get('/', 'AppUsersAdminController@index')->name('app.users.index');
+    Route::post('/', 'AppUsersAdminController@create')->name('app.users.create');
+    Route::get('/{id}', 'AppUsersAdminController@show')->name('app.users.show');
+    Route::put('/{id}', 'AppUsersAdminController@update')->name('app.users.adminUpdate');
+    Route::delete('/{id}', 'AppUsersAdminController@delete')->name('app.users.delete');
+    Route::post('/{id}/force-reset-password', 'AppUsersAdminController@forceResetPassword')->name('app.users.forceResetPassword');
 });
 
 /*
@@ -185,4 +202,12 @@ Route::group(['prefix' => 'settings', 'middleware' => ['auth', Admin::class]], f
     // Branding settings
     Route::get('/branding', 'AppSettingsController@getBranding')->name('app.settings.branding.get');
     Route::put('/branding', 'AppSettingsController@updateBranding')->name('app.settings.branding.update');
+    
+    // SMTP settings
+    Route::get('/smtp', 'AppSettingsController@getSmtp')->name('app.settings.smtp.get');
+    Route::put('/smtp', 'AppSettingsController@updateSmtp')->name('app.settings.smtp.update');
+    
+    // Licence settings
+    Route::get('/licence', 'AppSettingsController@getLicence')->name('app.settings.licence.get');
+    Route::put('/licence', 'AppSettingsController@updateLicence')->name('app.settings.licence.update');
 });

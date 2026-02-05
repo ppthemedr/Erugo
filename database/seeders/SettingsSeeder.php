@@ -444,6 +444,16 @@ class SettingsSeeder extends Seeder
                 'group' => 'system.emails.subjects',
                 'created_at' => now(),
                 'updated_at' => now()
+            ],
+
+            // Pro app licence
+            [
+                'key' => 'licence',
+                'value' => '',
+                'previous_value' => null,
+                'group' => 'system.licence',
+                'created_at' => now(),
+                'updated_at' => now()
             ]
 
         ]);

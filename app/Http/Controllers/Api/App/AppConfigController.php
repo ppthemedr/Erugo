@@ -82,6 +82,7 @@ class AppConfigController extends Controller
                     'has_custom_backgrounds' => (bool) $settings->get('use_my_backgrounds'),
                     'background_slideshow_speed' => (int) ($settings->get('background_slideshow_speed') ?? 180),
                 ],
+                'licence' => $settings->get('licence') ?: null,
             ]
         ]);
     }

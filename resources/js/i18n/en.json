@@ -431,6 +431,19 @@
       "documentation": "Documentation",
       "donate": "Support Development",
       "intro": "Erugo is a free, open-source, self-hosted file sharing platform. No tracking, no metrics — just simple, private file sharing that respects your data.",
+      "ios_app": {
+        "app_name": "Erugo for iOS",
+        "tagline": "Your files, in your pocket.",
+        "feature_1_title": "Share Extension",
+        "feature_1_desc": "Share files to Erugo from any app",
+        "feature_2_title": "Live Activities",
+        "feature_2_desc": "Track uploads in Dynamic Island",
+        "feature_3_title": "Background Uploads",
+        "feature_3_desc": "Uploads continue while you work",
+        "feature_4_title": "Mobile Admin",
+        "feature_4_desc": "Full dashboard on your phone",
+        "more_info": "More Info"
+      },
       "license": "License",
       "loading": "Loading system info...",
       "max_upload": "Max Upload",
@@ -760,6 +773,13 @@
         "refresh": "Refresh",
         "size": "Size",
         "title": "Database Backups"
+      },
+      "licence": {
+        "title": "Pro App Licence",
+        "label": "Licence Key",
+        "placeholder": "Paste your licence key here...",
+        "description": "Enter your Pro app licence key to unlock premium features for all users connecting to this server with the Erugo mobile apps. The licence key is provided when you purchase a Pro licence.",
+        "learn_more": "Learn more and purchase"
       },
       "callback_url": "Callback URL",
       "callback_url_description": "Use the callback URL provided in your identity provider configuration.",

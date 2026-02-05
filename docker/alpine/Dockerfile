@@ -47,6 +47,7 @@ RUN apk add --no-cache \
     ffmpeg \
     poppler-utils \
     imagemagick \
+    librsvg \
     libheif \
     exiftool \
     php83 \

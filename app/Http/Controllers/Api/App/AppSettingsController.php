@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\UpdateBrandingSettingsRequest;
 use App\Http\Requests\Settings\UpdateGeneralSettingsRequest;
 use App\Http\Requests\Settings\UpdateSharesSettingsRequest;
+use App\Http\Requests\Settings\UpdateSmtpSettingsRequest;
 use App\Services\SettingsRepository;
 use Illuminate\Http\JsonResponse;
 
@@ -131,5 +132,76 @@ class AppSettingsController extends Controller
         
         // Return combined result
         return $this->getBranding();
+    }
+
+    /**
+     * Get SMTP settings.
+     */
+    public function getSmtp(): JsonResponse
+    {
+        $settings = $this->settingsRepository->getGroup('system.smtp');
+        
+        // Mask password for security
+        if (isset($settings['smtp_password']) && $settings['smtp_password']) {
+            $settings['smtp_password'] = '********';
+        }
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => $settings
+        ]);
+    }
+
+    /**
+     * Update SMTP settings.
+     */
+    public function updateSmtp(UpdateSmtpSettingsRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+        
+        // If password is masked placeholder, don't update it
+        if (isset($data['smtp_password']) && $data['smtp_password'] === '********') {
+            unset($data['smtp_password']);
+        }
+        
+        $this->settingsRepository->updateGroup('system.smtp', $data);
+        
+        $settings = $this->settingsRepository->getGroup('system.smtp');
+        if (isset($settings['smtp_password']) && $settings['smtp_password']) {
+            $settings['smtp_password'] = '********';
+        }
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => $settings
+        ]);
+    }
+
+    /**
+     * Get licence settings.
+     */
+    public function getLicence(): JsonResponse
+    {
+        return response()->json([
+            'status' => 'success',
+            'data' => $this->settingsRepository->getGroup('system.licence')
+        ]);
+    }
+
+    /**
+     * Update licence settings.
+     */
+    public function updateLicence(\Illuminate\Http\Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'licence' => 'nullable|string'
+        ]);
+        
+        $this->settingsRepository->updateGroup('system.licence', $data);
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => $this->settingsRepository->getGroup('system.licence')
+        ]);
     }
 }

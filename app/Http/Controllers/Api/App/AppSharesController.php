@@ -31,6 +31,8 @@ class AppSharesController extends Controller
     private const THUMB_PDF_EXTENSIONS = ['pdf'];
     private const THUMB_DNG_TYPES = ['image/x-adobe-dng', 'image/dng'];
     private const THUMB_DNG_EXTENSIONS = ['dng'];
+    private const THUMB_PSD_TYPES = ['image/vnd.adobe.photoshop', 'image/x-photoshop', 'image/psd'];
+    private const THUMB_PSD_EXTENSIONS = ['psd', 'psb'];
 
     /**
      * Symfony's Content-Disposition filename cannot contain "/" or "\".
@@ -47,6 +49,18 @@ class AppSharesController extends Controller
 
     /**
      * List the authenticated user's shares with pagination
+     * 
+     * Supports filtering via `status` parameter (comma-separated):
+     * - active: not expired, not deleted (default)
+     * - expired: expired but not deleted
+     * - deleted: deleted shares
+     * - all: no filtering
+     * 
+     * Examples:
+     * - ?status=active (default)
+     * - ?status=active,expired (all non-deleted)
+     * - ?status=expired (only expired)
+     * - ?status=all (everything)
      */
     public function index(Request $request): JsonResponse
     {
@@ -60,8 +74,11 @@ class AppSharesController extends Controller
             ], 401);
         }
 
-        $showDeleted = $request->input('show_deleted', false);
+        $statusParam = $request->input('status', 'active');
         $perPage = min((int) $request->input('per_page', 20), 100); // Max 100 per page
+
+        // Parse comma-separated status values
+        $statuses = array_map('trim', explode(',', strtolower($statusParam)));
 
         // Include shares the user owns OR shares created for them via reverse share invites
         $query = Share::where(function ($query) use ($user) {
@@ -71,8 +88,35 @@ class AppSharesController extends Controller
                 });
         })->orderBy('created_at', 'desc')->with(['files', 'invite']);
 
-        if ($showDeleted === 'false') {
-            $query = $query->where('status', '!=', 'deleted');
+        // Apply status filtering (unless 'all' is specified)
+        if (!in_array('all', $statuses)) {
+            $query->where(function ($q) use ($statuses) {
+                $now = Carbon::now();
+                
+                if (in_array('active', $statuses)) {
+                    // Active: not expired and not deleted
+                    $q->orWhere(function ($active) use ($now) {
+                        $active->where('status', '!=', 'deleted')
+                            ->where(function ($exp) use ($now) {
+                                $exp->where('expires_at', '>=', $now)
+                                    ->orWhereNull('expires_at');
+                            });
+                    });
+                }
+                
+                if (in_array('expired', $statuses)) {
+                    // Expired: past expiry date but not deleted
+                    $q->orWhere(function ($expired) use ($now) {
+                        $expired->where('status', '!=', 'deleted')
+                            ->where('expires_at', '<', $now);
+                    });
+                }
+                
+                if (in_array('deleted', $statuses)) {
+                    // Deleted: status is deleted
+                    $q->orWhere('status', 'deleted');
+                }
+            });
         }
 
         $paginated = $query->paginate($perPage);
@@ -845,6 +889,7 @@ class AppSharesController extends Controller
         $isEpub = $this->isEpubFile($file->type, $file->name);
         $isPdf = $this->isPdfFile($file->type, $file->name);
         $isDng = $this->isDngFile($file->type, $file->name);
+        $isPsd = $this->isPsdFile($file->type, $file->name);
 
         // Ensure cache directory exists
         if (!is_dir($thumbCacheDir)) {
@@ -872,6 +917,8 @@ class AppSharesController extends Controller
                 $this->generatePdfThumbnail($sourcePath, $thumbPath);
             } elseif ($isDng) {
                 $this->generateDngThumbnail($sourcePath, $thumbPath);
+            } elseif ($isPsd) {
+                $this->generatePsdThumbnail($sourcePath, $thumbPath);
             } else {
                 $this->generateImageThumbnail($sourcePath, $thumbPath);
             }
@@ -965,6 +1012,8 @@ class AppSharesController extends Controller
                 $this->generatePdfThumbnail($tempFile, $thumbPath);
             } elseif ($isDng) {
                 $this->generateDngThumbnail($tempFile, $thumbPath);
+            } elseif ($isPsd) {
+                $this->generatePsdThumbnail($tempFile, $thumbPath);
             } else {
                 $this->generateImageThumbnail($tempFile, $thumbPath);
             }
@@ -1312,10 +1361,14 @@ class AppSharesController extends Controller
             return true;
         }
         
+        if (in_array($mimeType, self::THUMB_PSD_TYPES)) {
+            return true;
+        }
+        
         // Check extension for files with generic MIME type
         if ($mimeType === 'application/octet-stream' && $filename) {
             $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-            if (in_array($ext, self::THUMB_AUDIO_EXTENSIONS) || in_array($ext, self::THUMB_EPUB_EXTENSIONS) || in_array($ext, self::THUMB_PDF_EXTENSIONS) || in_array($ext, self::THUMB_DNG_EXTENSIONS)) {
+            if (in_array($ext, self::THUMB_AUDIO_EXTENSIONS) || in_array($ext, self::THUMB_EPUB_EXTENSIONS) || in_array($ext, self::THUMB_PDF_EXTENSIONS) || in_array($ext, self::THUMB_DNG_EXTENSIONS) || in_array($ext, self::THUMB_PSD_EXTENSIONS)) {
                 return true;
             }
         }
@@ -1389,6 +1442,56 @@ class AppSharesController extends Controller
         }
         
         return false;
+    }
+
+    /**
+     * Check if a file is a PSD file (by MIME type or extension)
+     */
+    private function isPsdFile(?string $mimeType, ?string $filename = null): bool
+    {
+        if (in_array($mimeType, self::THUMB_PSD_TYPES)) {
+            return true;
+        }
+        
+        if ($mimeType === 'application/octet-stream' && $filename) {
+            $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+            return in_array($ext, self::THUMB_PSD_EXTENSIONS);
+        }
+        
+        return false;
+    }
+
+    /**
+     * Generate a thumbnail from PSD file using ImageMagick
+     */
+    private function generatePsdThumbnail(string $psdPath, string $outputPath): void
+    {
+        $tempPath = $outputPath . '.tmp.png';
+
+        // Use ImageMagick to convert PSD to temporary PNG
+        // [0] selects the composite/flattened image layer
+        $convertCommand = sprintf(
+            'convert %s[0] -thumbnail 200x200 %s 2>/dev/null',
+            escapeshellarg($psdPath),
+            escapeshellarg($tempPath)
+        );
+        shell_exec($convertCommand);
+
+        // Convert to webp
+        if (file_exists($tempPath) && filesize($tempPath) > 0) {
+            try {
+                $manager = new ImageManager(new Driver());
+                $image = $manager->read($tempPath);
+                $encoded = $image->toWebp(80);
+                file_put_contents($outputPath, $encoded);
+            } catch (\Exception $e) {
+                // PSD thumbnail conversion failed
+            } finally {
+                if (file_exists($tempPath)) {
+                    unlink($tempPath);
+                }
+            }
+        }
     }
 
     /**

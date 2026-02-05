@@ -613,11 +613,113 @@ Delete a background.
 
 ---
 
+## SMTP Settings
+
+Manage SMTP/mail server configuration for sending emails.
+
+### GET /settings/smtp
+
+Returns all SMTP settings. The password is always masked for security.
+
+**Response:**
+
+```json
+{
+    "status": "success",
+    "data": {
+        "smtp_host": "in-v3.mailjet.com",
+        "smtp_port": 587,
+        "smtp_encryption": "tls",
+        "smtp_username": "cd144af2c32e10060c56895e72ca0e4b",
+        "smtp_password": "********",
+        "smtp_sender_name": "Erugo",
+        "smtp_sender_address": "erugo@send.yixe.co.uk"
+    }
+}
+```
+
+**Field Types:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `smtp_host` | `String?` | SMTP server hostname (nullable) |
+| `smtp_port` | `Int?` | SMTP server port (nullable, 1-65535) |
+| `smtp_encryption` | `String` | Encryption mode: `"none"`, `"tls"`, or `"ssl"` |
+| `smtp_username` | `String?` | SMTP authentication username (nullable) |
+| `smtp_password` | `String?` | Always returns `"********"` when set, `null` when not set |
+| `smtp_sender_name` | `String?` | Display name for sent emails (nullable) |
+| `smtp_sender_address` | `String?` | Email address for sent emails (nullable) |
+
+---
+
+### PUT /settings/smtp
+
+Update SMTP settings. Supports partial updates - only include fields you want to change.
+
+**Password Handling:** If you send `"********"` as the password value, the existing password is preserved (not overwritten). To clear the password, send `null` or an empty string.
+
+**Request Body:**
+
+All fields are optional. Include only the fields you want to update.
+
+```json
+{
+    "smtp_host": "smtp.example.com",
+    "smtp_port": 587,
+    "smtp_encryption": "tls"
+}
+```
+
+**Validation Rules:**
+
+| Field | Rules |
+|-------|-------|
+| `smtp_host` | String, max 255 characters, nullable |
+| `smtp_port` | Integer, 1-65535, nullable |
+| `smtp_encryption` | One of: `"none"`, `"tls"`, `"ssl"` |
+| `smtp_username` | String, max 255 characters, nullable |
+| `smtp_password` | String, max 255 characters, nullable |
+| `smtp_sender_name` | String, max 255 characters, nullable |
+| `smtp_sender_address` | Valid email address, max 255 characters, nullable |
+
+**Success Response:**
+
+Returns the complete updated settings (same format as GET, with password masked).
+
+```json
+{
+    "status": "success",
+    "data": {
+        "smtp_host": "smtp.example.com",
+        "smtp_port": 587,
+        "smtp_encryption": "tls",
+        "smtp_username": "user@example.com",
+        "smtp_password": "********",
+        "smtp_sender_name": "My App",
+        "smtp_sender_address": "noreply@example.com"
+    }
+}
+```
+
+**Validation Error Example:**
+
+```json
+{
+    "message": "The selected smtp encryption is invalid.",
+    "errors": {
+        "smtp_encryption": [
+            "The selected smtp encryption is invalid."
+        ]
+    }
+}
+```
+
+---
+
 ## Additional Settings Groups (Coming Soon)
 
 The following settings groups will be added in future updates:
 
-- **SMTP Settings** (`/settings/smtp`) - Mail server configuration
 - **Email Notifications** (`/settings/email-notifications`) - Notification toggles
 - **Auth Settings** (`/settings/auth`) - Self-registration settings
 
@@ -795,6 +897,54 @@ struct UpdateBrandingSettingsRequest: Codable {
         case useMyBackgrounds = "use_my_backgrounds"
         case backgroundSlideshowSpeed = "background_slideshow_speed"
         case showPoweredBy = "show_powered_by"
+    }
+}
+
+// MARK: - SMTP Settings
+
+struct SmtpSettings: Codable {
+    let smtpHost: String?
+    let smtpPort: Int?
+    let smtpEncryption: SmtpEncryption
+    let smtpUsername: String?
+    let smtpPassword: String?
+    let smtpSenderName: String?
+    let smtpSenderAddress: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case smtpHost = "smtp_host"
+        case smtpPort = "smtp_port"
+        case smtpEncryption = "smtp_encryption"
+        case smtpUsername = "smtp_username"
+        case smtpPassword = "smtp_password"
+        case smtpSenderName = "smtp_sender_name"
+        case smtpSenderAddress = "smtp_sender_address"
+    }
+}
+
+enum SmtpEncryption: String, Codable {
+    case none = "none"
+    case tls = "tls"
+    case ssl = "ssl"
+}
+
+struct UpdateSmtpSettingsRequest: Codable {
+    var smtpHost: String?
+    var smtpPort: Int?
+    var smtpEncryption: SmtpEncryption?
+    var smtpUsername: String?
+    var smtpPassword: String?
+    var smtpSenderName: String?
+    var smtpSenderAddress: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case smtpHost = "smtp_host"
+        case smtpPort = "smtp_port"
+        case smtpEncryption = "smtp_encryption"
+        case smtpUsername = "smtp_username"
+        case smtpPassword = "smtp_password"
+        case smtpSenderName = "smtp_sender_name"
+        case smtpSenderAddress = "smtp_sender_address"
     }
 }
 
