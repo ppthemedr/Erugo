@@ -5,6 +5,11 @@ import { domData } from '../../domData'
 import { getSystemInfo } from '../../api'
 import { store } from '../../store'
 
+// iOS app assets
+import iosAppIcon from '../../assets/ios-app/erugo-ios-icon.png'
+import appStoreBadge from '../../assets/ios-app/app-store-badge.svg'
+import iosMockupUpload from '../../assets/ios-app/ios-mockup-upload.png'
+
 const version = ref('unknown')
 const systemInfo = ref(null)
 const loading = ref(true)
@@ -107,14 +112,14 @@ const OpenExternalLink = (url) => {
                 <div class="ios-app-section">
                   <div class="ios-app-header">
                     <div class="ios-app-icon">
-                      <img :src="'/images/erugo-ios-icon.png'" alt="Erugo iOS App" />
+                      <img :src="iosAppIcon" alt="Erugo iOS App" />
                     </div>
                     <div class="ios-app-title-area">
                       <h3 class="ios-app-name">{{ $t('settings.about.ios_app.app_name') }}</h3>
                       <p class="ios-app-tagline">{{ $t('settings.about.ios_app.tagline') }}</p>
                       <div class="ios-app-links">
                         <a href="https://testflight.apple.com/join/Zz2DdSm5" target="_blank" rel="noopener noreferrer" class="app-store-link">
-                          <img :src="'/images/app-store-badge.svg'" alt="Download on the App Store" class="app-store-badge" />
+                          <img :src="appStoreBadge" alt="Download on the App Store" class="app-store-badge" />
                         </a>
                         <a href="https://erugo.app/erugo-mobile-app" target="_blank" class="more-info-link">
                           {{ $t('settings.about.ios_app.more_info') }}
@@ -124,7 +129,7 @@ const OpenExternalLink = (url) => {
                   </div>
 
                   <div class="ios-app-mockup">
-                    <img :src="'/images/ios-mockup-upload.png'" alt="Erugo iOS Upload Screen" />
+                    <img :src="iosMockupUpload" alt="Erugo iOS Upload Screen" />
                   </div>
 
                   <div class="ios-app-features">
