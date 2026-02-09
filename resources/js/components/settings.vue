@@ -19,7 +19,8 @@ import {
   RefreshCw,
   Loader2,
   LogIn,
-  Info
+  Info,
+  Share2
 } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import Users from './settings/users.vue'
@@ -30,6 +31,8 @@ import EmailTemplates from './settings/emailTemplates.vue'
 import MyProfile from './settings/myProfile.vue'
 import MyShares from './settings/myShares.vue'
 import AllShares from './settings/allShares.vue'
+import MyLiveshares from './settings/myLiveshares.vue'
+import AllLiveshares from './settings/allLiveshares.vue'
 import About from './settings/about.vue'
 import { getUsers } from '../api'
 import ButtonWithMenu from './buttonWithMenu.vue'
@@ -64,6 +67,8 @@ const tabContents = ref({
   myProfile: ref(null),
   myShares: ref(null),
   allShares: ref(null),
+  myLiveshares: ref(null),
+  allLiveshares: ref(null),
   about: ref(null)
 })
 
@@ -105,6 +110,9 @@ const setActiveTab = (tab, options = {}) => {
 }
 
 const getInitialTab = () => {
+  if (store.isRestricted()) {
+    return 'myLiveshares'
+  }
   return 'myShares'
 }
 
@@ -152,6 +160,8 @@ const getSettingsTitle = () => {
       myProfile: 'My Profile',
       myShares: 'My Shares',
       allShares: 'All Shares',
+      myLiveshares: 'My Liveshares',
+      allLiveshares: 'All Liveshares',
       emailTemplates: 'Email Templates',
       about: 'About'
     }
@@ -175,6 +185,10 @@ const getSettingsTitle = () => {
       return t.value('settings.title.allShares')
     case 'emailTemplates':
       return t.value('settings.title.emailTemplates')
+    case 'myLiveshares':
+      return 'My Liveshares'
+    case 'allLiveshares':
+      return 'All Liveshares'
     case 'about':
       return t.value('settings.title.about')
     default:
@@ -250,7 +264,7 @@ const handleUserFilterChange = (event) => {
       </div>
       <div class="settings-tabs-wrapper">
         <div class="settings-tabs-container">
-          <div class="settings-tab" :class="{ active: activeTab === 'about' }" @click="setActiveTab('about')">
+          <div class="settings-tab" :class="{ active: activeTab === 'about' }" @click="setActiveTab('about')" v-if="!store.isRestricted()">
             <h2>
               <Info />
               {{ $t('settings.title.about') }}
@@ -322,10 +336,27 @@ const handleUserFilterChange = (event) => {
               {{ $t('settings.title.allShares') }}
             </h2>
           </div>
-          <div class="settings-tab" :class="{ active: activeTab === 'myShares' }" @click="setActiveTab('myShares')">
+          <div class="settings-tab" :class="{ active: activeTab === 'myShares' }" @click="setActiveTab('myShares')" v-if="!store.isRestricted()">
             <h2>
               <Boxes />
               {{ $t('settings.title.myShares') }}
+            </h2>
+          </div>
+          <div
+            class="settings-tab"
+            :class="{ active: activeTab === 'allLiveshares' }"
+            @click="setActiveTab('allLiveshares')"
+            v-if="store.isAdmin()"
+          >
+            <h2>
+              <Share2 />
+              All Liveshares
+            </h2>
+          </div>
+          <div class="settings-tab" :class="{ active: activeTab === 'myLiveshares' }" @click="setActiveTab('myLiveshares')">
+            <h2>
+              <Share2 />
+              My Liveshares
             </h2>
           </div>
           <div class="settings-tab" :class="{ active: activeTab === 'myProfile' }" @click="setActiveTab('myProfile')">
@@ -571,6 +602,44 @@ const handleUserFilterChange = (event) => {
               </div>
               <div class="tab-content-body">
                 <MyShares ref="mySharesPanel" v-if="store.settingsOpen" />
+              </div>
+            </div>
+            <div
+              v-else-if="activeTab === 'myLiveshares'"
+              class="settings-tab-content"
+              ref="tabContents.myLiveshares"
+              key="myLiveshares"
+            >
+              <div class="tab-content-header">
+                <h2 class="d-none d-md-flex">
+                  <Share2 />
+                  <span>
+                    My Liveshares
+                    <small>Persistent shared spaces for collaboration</small>
+                  </span>
+                </h2>
+              </div>
+              <div class="tab-content-body">
+                <MyLiveshares v-if="store.settingsOpen" />
+              </div>
+            </div>
+            <div
+              v-else-if="activeTab === 'allLiveshares'"
+              class="settings-tab-content"
+              ref="tabContents.allLiveshares"
+              key="allLiveshares"
+            >
+              <div class="tab-content-header">
+                <h2 class="d-none d-md-flex">
+                  <Share2 />
+                  <span>
+                    All Liveshares
+                    <small>Manage all liveshares across the system</small>
+                  </span>
+                </h2>
+              </div>
+              <div class="tab-content-body">
+                <AllLiveshares v-if="store.settingsOpen" />
               </div>
             </div>
             <div

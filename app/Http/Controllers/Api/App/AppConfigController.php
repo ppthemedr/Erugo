@@ -68,12 +68,16 @@ class AppConfigController extends Controller
                     'self_registration_enabled' => (bool) $settings->get('self_registration_enabled'),
                     'reverse_shares_enabled' => (bool) $settings->get('allow_reverse_shares'),
                     'external_auth_enabled' => $authProviders->isNotEmpty(),
+                    'liveshares_enabled' => (bool) ($settings->get('liveshares_enabled') ?? true),
                 ],
                 'limits' => [
                     'max_share_size_bytes' => $settings->getMaxUploadSize(),
                     'max_share_size_formatted' => $this->formatBytes($settings->getMaxUploadSize()),
                     'max_expiry_days' => $settings->get('max_expiry_time'),
                     'default_expiry_days' => $settings->get('default_expiry_time'),
+                    'liveshare_max_size_bytes' => $this->getLiveshareMaxSizeBytes($settings),
+                    'liveshare_max_size_formatted' => $this->formatBytes($this->getLiveshareMaxSizeBytes($settings)),
+                    'liveshare_max_files_per_user' => (int) ($settings->get('liveshares_max_files_per_user') ?? 100),
                 ],
                 'auth_providers' => $authProviders,
                 'branding' => [
@@ -149,6 +153,23 @@ class AppConfigController extends Controller
         $key = lcfirst(str_replace(' ', '', ucwords(str_replace('-', ' ', $key))));
         
         return $key;
+    }
+
+    /**
+     * Calculate liveshare max size in bytes from settings
+     */
+    private function getLiveshareMaxSizeBytes(SettingsService $settings): int
+    {
+        $maxSize = (int) ($settings->get('liveshares_max_size') ?? 5);
+        $unit = $settings->get('liveshares_max_size_unit') ?? 'GB';
+        $multiplier = match (strtoupper($unit)) {
+            'KB' => 1024,
+            'MB' => 1024 * 1024,
+            'GB' => 1024 * 1024 * 1024,
+            'TB' => 1024 * 1024 * 1024 * 1024,
+            default => 1024 * 1024 * 1024,
+        };
+        return $maxSize * $multiplier;
     }
 
     /**

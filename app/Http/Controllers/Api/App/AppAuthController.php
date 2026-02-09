@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Setting;
 use App\Models\ReverseShareInvite;
+use App\Models\LiveshareInvite;
+use App\Models\LiveshareMember;
 use App\Models\AuthProvider;
 use App\Models\AppAuthState;
 use App\Models\UserAuthProvider;
@@ -460,6 +462,119 @@ class AppAuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'If an unverified account exists with this email, a new verification code has been sent.'
+        ]);
+    }
+
+    /**
+     * Register a new user via a liveshare invite token.
+     * Returns tokens in JSON body (app-style auth).
+     */
+    public function registerViaInvite(Request $request, string $token): JsonResponse
+    {
+        $invite = LiveshareInvite::where('token', $token)
+            ->with('liveshare')
+            ->first();
+
+        if (!$invite) {
+            return response()->json([
+                'status' => 'error',
+                'code' => 'LIVESHARE_INVITE_NOT_FOUND',
+                'message' => 'Invite not found'
+            ], 404);
+        }
+
+        if (!$invite->canBeUsed()) {
+            $code = $invite->isExpired() ? 'LIVESHARE_INVITE_EXPIRED' : 'LIVESHARE_INVITE_EXHAUSTED';
+            $message = $invite->isExpired() ? 'This invite has expired' : 'This invite has been used up';
+
+            return response()->json([
+                'status' => 'error',
+                'code' => $code,
+                'message' => $message
+            ], 410);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'password' => ['required', 'confirmed', PasswordRules::min(8)],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'code' => 'VALIDATION_ERROR',
+                'message' => 'Validation failed',
+                'data' => [
+                    'errors' => $validator->errors()
+                ]
+            ], 422);
+        }
+
+        // For email invites, verify the email matches
+        if ($invite->type === 'email' && !$invite->isValidForEmail($request->email)) {
+            return response()->json([
+                'status' => 'error',
+                'code' => 'LIVESHARE_INVITE_EMAIL_MISMATCH',
+                'message' => 'This invite was sent to a different email address'
+            ], 403);
+        }
+
+        // Determine if user should be restricted based on self-registration setting
+        $selfRegEnabled = Setting::where('key', 'self_registration_enabled')->first();
+        $isRestricted = !($selfRegEnabled && $selfRegEnabled->value === 'true');
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'admin' => false,
+            'active' => true,
+            'must_change_password' => false,
+            'is_restricted' => $isRestricted,
+        ]);
+
+        // Add user as a member of the liveshare
+        LiveshareMember::create([
+            'liveshare_id' => $invite->liveshare->id,
+            'user_id' => $user->id,
+            'role' => $invite->role,
+        ]);
+
+        $invite->recordUse();
+
+        // Generate tokens (app-style: both in response body)
+        $accessToken = Auth::login($user);
+
+        if (!$accessToken) {
+            return response()->json([
+                'status' => 'error',
+                'code' => 'AUTH_TOKEN_GENERATION_FAILED',
+                'message' => 'Failed to generate access token'
+            ], 500);
+        }
+
+        $refreshToken = Auth::setTTL($this->getRefreshTokenTTL())->tokenById($user->id);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Registration successful',
+            'data' => [
+                'access_token' => $accessToken,
+                'refresh_token' => $refreshToken,
+                'token_type' => 'Bearer',
+                'access_token_expires_in' => $this->getAccessTokenTTL() * 60,
+                'refresh_token_expires_in' => $this->getRefreshTokenTTL() * 60,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'admin' => (bool) $user->admin,
+                    'is_guest' => (bool) $user->is_guest,
+                    'must_change_password' => (bool) $user->must_change_password,
+                ],
+                'liveshare_long_id' => $invite->liveshare->long_id,
+            ]
         ]);
     }
 

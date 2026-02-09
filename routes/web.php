@@ -119,6 +119,23 @@ Route::get('/shares/{share}/file/{filepath}', function ($shareId, $filepath) {
     return $controller->downloadFile($shareId, $filepath);
 })->where('filepath', '.*');
 
+// Liveshare invite acceptance page
+Route::get('/liveshares/invite/{token}', function ($token) {
+    $indexedSettings = getSettings();
+
+    $theme = Theme::where('active', true)->first();
+
+    return view('app', ['settings' => $indexedSettings, 'theme' => $theme]);
+});
+
+// Liveshare workspace
+Route::get('/liveshares/{liveshare}', function ($liveshareId) {
+    $indexedSettings = getSettings();
+
+    $theme = Theme::where('active', true)->first();
+
+    return view('app', ['settings' => $indexedSettings, 'theme' => $theme]);
+});
 
 //auth provider login
 Route::get('/auth/provider/{provider}/login', [ExternalAuthController::class, 'providerLogin'])

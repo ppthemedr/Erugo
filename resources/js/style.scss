@@ -192,6 +192,14 @@ body {
   @media (min-width: 900px) {
     margin-bottom: -60px;
   }
+
+  &--liveshare {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    justify-content: flex-start;
+    margin-bottom: 0;
+  }
 }
 
 .logo-container {
