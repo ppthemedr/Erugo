@@ -14,6 +14,7 @@ import {
   getAvailableAuthProviders,
   acceptReverseShareInvite,
   acceptReverseShareInviteById,
+  acceptUploadLink,
   getRegistrationSettings,
   registerUser,
   verifyEmail,
@@ -102,6 +103,21 @@ onMounted(async () => {
       //remove the invite token from the url
       window.history.replaceState({}, document.title, window.location.pathname)
       toast.error(t.value('auth.failed_to_accept_invite'))
+    }
+  }
+
+  // Grab upload link token from url (for upload link guest users)
+  const uploadToken = urlParams.get('upload_token')
+  if (uploadToken) {
+    try {
+      const data = await acceptUploadLink(uploadToken)
+      store.authSuccess(data)
+      store.uploadLinkGuest = true
+      toast.success('Upload link accepted')
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } catch (error) {
+      window.history.replaceState({}, document.title, window.location.pathname)
+      toast.error(error.message || 'Upload link is invalid or expired')
     }
   }
 })

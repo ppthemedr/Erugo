@@ -55,6 +55,10 @@ const getApiUrl = () => {
 }
 
 const getTusdUrl = () => {
+  // Allow overriding via env variable for local development (where there's no Caddy proxy)
+  if (import.meta.env.VITE_TUSD_URL) {
+    return import.meta.env.VITE_TUSD_URL
+  }
   // tusd is proxied through Caddy at /files/ in both dev and prod
   // Build URL explicitly from protocol and host to ensure HTTPS is respected
   const protocol = window.location.protocol

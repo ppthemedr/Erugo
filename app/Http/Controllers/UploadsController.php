@@ -17,6 +17,7 @@ use App\Jobs\sendEmail;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use App\Models\UploadLink;
 
 class UploadsController extends Controller
 {
@@ -353,7 +354,43 @@ class UploadsController extends Controller
     CreateShareZip::dispatch($share);
 
     if ($user->is_guest) {
-      // Guest user flow (unchanged)
+      // Check if this guest user belongs to an upload link
+      $uploadLink = UploadLink::where('guest_user_id', $user->id)->first();
+
+      if ($uploadLink) {
+        // Upload link guest user flow
+        $share->public = false;
+        $share->user_id = $uploadLink->user_id; // Associate share with the link creator
+        $share->save();
+
+        // Increment use count
+        $uploadLink->incrementUseCount();
+
+        // If use limit reached: logout, deactivate, cleanup
+        if ($uploadLink->hasReachedUseLimit()) {
+          $uploadLink->active = false;
+          $uploadLink->save();
+          Auth::logout();
+          $user->delete();
+
+          $cookie = cookie('refresh_token', '', 0, null, null, false, true);
+          return response()->json([
+            'status' => 'success',
+            'message' => 'Share created',
+          ])->withCookie($cookie);
+        }
+
+        // Multi-use: keep session alive so user can upload again
+        return response()->json([
+          'status' => 'success',
+          'message' => 'Share created',
+          'data' => [
+            'share' => $share
+          ]
+        ]);
+      }
+
+      // Reverse share invite guest user flow
       $invite = $user->invite;
       $share->public = false;
       $share->invite_id = $invite->id;

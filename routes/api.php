@@ -19,6 +19,7 @@ use App\Http\Controllers\TusdHooksController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\SelfRegistrationController;
 use App\Http\Controllers\BackupsController;
+use App\Http\Controllers\UploadLinksController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -215,6 +216,16 @@ Route::group([], function ($router) {
 
 // tusd webhook handler (called by tusd server, not authenticated via middleware)
 Route::post('/tusd-hooks', [TusdHooksController::class, 'handleHook'])->name('tusd.hooks');
+
+// Upload links [auth]
+Route::group(['prefix' => 'upload-links', 'middleware' => ['auth']], function ($router) {
+    Route::post('/', [UploadLinksController::class, 'create'])->name('upload-links.create');
+    Route::get('/', [UploadLinksController::class, 'index'])->name('upload-links.index');
+    Route::delete('/{id}', [UploadLinksController::class, 'delete'])->name('upload-links.delete');
+});
+
+// Accept upload link [public]
+Route::get('/upload-links/accept', [UploadLinksController::class, 'accept'])->name('upload-links.accept');
 
 // Upload routes (now using tusd for actual uploads)
 Route::group(['prefix' => 'uploads', 'middleware' => ['auth']], function ($router) {

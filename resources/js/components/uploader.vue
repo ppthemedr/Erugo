@@ -464,7 +464,10 @@ const doTusUpload = async (uploadId) => {
         }
         // Clear the interrupted upload state on successful completion
         clearUploadState()
-        if (store.isGuest()) {
+        if (store.uploadLinkGuest) {
+          // Upload link guest: stay logged in, show success, allow more uploads
+          toast.success('Upload successful!')
+        } else if (store.isGuest()) {
           thankGuestForUpload()
         } else {
           showSharePanel(createShareURL(result.data.share.long_id))

@@ -19,6 +19,7 @@ const store = reactive({
   userId: null,
   admin: false,
   guest: false,
+  uploadLinkGuest: false,
   jwt: null,
   jwtExpires: null,
   loggedIn: false,
